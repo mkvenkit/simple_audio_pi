@@ -14,9 +14,16 @@ from tflite_runtime.interpreter import Interpreter
 def get_spectrogram(wavfile_name):
     
     rate, waveform = wavfile.read(wavfile_name)
-    waveform = waveform / 32768.0
+    # if stereo, pick the left channel
+    if waveform.shape == (16000, 2):
+        print("Stereo detected. Picking one channel.")
+        waveform = waveform.T[0] / 32768.0
+    else: 
+        waveform = waveform / 32768.0
     spectrogram = None
         
+    print("waveform:", waveform.shape)
+    
     # Padding for files with less than 16000 samples
     #zero_padding = np.zeros([16000] - np.shape(waveform), dtype=np.float32)
     
@@ -36,7 +43,6 @@ def get_inference(wavfile_name):
     # get spectrogram data 
     waveform, spectrogram = get_spectrogram(wavfile_name)
 
-    print("waveform:", waveform.shape)
     spectrogram1= np.reshape(spectrogram, (-1, spectrogram.shape[0], spectrogram.shape[1], 1))
     print("spectrogram1: %s, %s, %s" % (type(spectrogram1), spectrogram1.dtype, spectrogram1.shape))
 
