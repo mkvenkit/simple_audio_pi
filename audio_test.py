@@ -1,53 +1,78 @@
 import pyaudio
 import numpy as np
+from scipy.io import wavfile
 
 import wave
 
-CHUNK = 1000
-FORMAT = pyaudio.paInt32
-CHANNELS = 2
-RATE = 16000 
-RECORD_SECONDS = 1
-WAVE_OUTPUT_FILENAME = "test.wav"
-NFRAMES = int((RATE * RECORD_SECONDS) / CHUNK)
-# initialize portaudio
-p = pyaudio.PyAudio()
+# get pyaudio input device
+def getInputDevice(p):
+    index = None
+    nDevices = p.get_device_count()
+    print('Found %d devices:' % nDevices)
+    for i in range(nDevices):
+        deviceInfo = p.get_device_info_by_index(i)
+        #print(deviceInfo)
+        devName = deviceInfo['name']
+        print(devName)
+        # look for the "input" keyword
+        # choose the first such device as input
+        # change this loop to modify this behavior
+        # maybe you want "mic"?
+        if not index:
+            if 'input' in devName.lower():
+                index = i
+    # print out chosen device
+    if index is not None:
+        devName = p.get_device_info_by_index(index)["name"]
+        #print("Input device chosen: %s" % devName)
+    return index
 
-# Get input device number
-info = p.get_host_api_info_by_index(0)
-numdevices = info.get('deviceCount')
-for i in range(0, numdevices):
-    if (p.get_device_info_by_host_api_device_index(0, i).get('maxInputChannels')) > 0:
-        print("Input Device id ", i, " - ", p.get_device_info_by_host_api_device_index(0, i).get('name'))
+def main():
 
-stream = p.open(format=FORMAT,
-            channels=CHANNELS,
-            rate=RATE,
-            input=True,
-            frames_per_buffer=CHUNK,
-            input_device_index = 2)
+    CHUNK = 4096
+    FORMAT = pyaudio.paInt32
+    CHANNELS = 2
+    RATE = 16000 
+    RECORD_SECONDS = 1
+    WAVE_OUTPUT_FILENAME = "test.wav"
+    NFRAMES = int((RATE * RECORD_SECONDS) / CHUNK)
 
-frames = []
+    # initialize pyaudio
+    p = pyaudio.PyAudio()
+    getInputDevice(p)
 
-# discard first 1 second
-data = stream.read(CHUNK)
-for i in range(0, NFRAMES):
-    pass
+    print('opening stream...')
+    stream = p.open(format = FORMAT,
+                    channels = CHANNELS,
+                    rate = RATE,
+                    input = True,
+                    frames_per_buffer = CHUNK,
+                    input_device_index = 1)
 
-print("start recording!")
+    frames = []
 
-for i in range(0, NFRAMES):
-     data = stream.read(CHUNK)
-     #print(data)
-     frames.append(data)
+    # discard first 1 second
+    for i in range(0, NFRAMES):
+        data = stream.read(CHUNK)
 
-stream.stop_stream()
-stream.close()
-p.terminate()
+    print("start recording!")
 
-wf = wave.open(WAVE_OUTPUT_FILENAME, 'wb')
-wf.setnchannels(CHANNELS)
-wf.setsampwidth(p.get_sample_size(FORMAT))
-wf.setframerate(RATE)
-wf.writeframes(b''.join(frames))
-wf.close()
+    for i in range(0, NFRAMES):
+        data = stream.read(CHUNK)
+        #print(data)
+        frames.append(data)
+
+    stream.stop_stream()
+    stream.close()
+    p.terminate()
+
+    wf = wave.open(WAVE_OUTPUT_FILENAME, 'wb')
+    wf.setnchannels(CHANNELS)
+    wf.setsampwidth(p.get_sample_size(FORMAT))
+    wf.setframerate(RATE)
+    wf.writeframes(b''.join(frames))
+    wf.close()
+
+# main method
+if __name__ == '__main__':
+    main()

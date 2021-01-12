@@ -14,24 +14,45 @@ from tflite_runtime.interpreter import Interpreter
 def get_spectrogram(wavfile_name):
     
     rate, waveform = wavfile.read(wavfile_name)
+    print("waveform:", waveform.shape, waveform.dtype, type(waveform))
+    print(waveform[:5])
+
     # if stereo, pick the left channel
-    if waveform.shape == (16000, 2):
+    if len(waveform.shape) == 2:
         print("Stereo detected. Picking one channel.")
-        waveform = waveform.T[0] / 32768.0
+        waveform = waveform.T[1]
     else: 
-        waveform = waveform / 32768.0
+        waveform = waveform 
     spectrogram = None
         
-    print("waveform:", waveform.shape)
-    
+    print("After scaling:")
+    print("waveform:", waveform.shape, waveform.dtype, type(waveform))
+    print(waveform[:5])
+
+    # normalise audio
+    wabs = np.abs(waveform)
+    print("wabs :", wabs.shape)
+    print(wabs[:5])
+    wmax = np.max(wabs)
+    print("wmax = ", wmax)
+    waveform = waveform / wmax
+    print("After normalisation:")
+    print("waveform:", waveform.shape, waveform.dtype, type(waveform))
+    print(waveform[:5])
+
     # Padding for files with less than 16000 samples
-    #zero_padding = np.zeros([16000] - np.shape(waveform), dtype=np.float32)
-    
-    f, t, Zxx = signal.stft(waveform, fs=16000, nperseg=255, noverlap = 124, nfft=256)
+    print("After padding:")
+    waveform_padded = np.zeros((16000,))
+    waveform_padded[:waveform.shape[0]] = waveform
+    print("waveform_padded:", waveform_padded.shape, waveform_padded.dtype, type(waveform_padded))
+    print(waveform_padded[:5])
+
+    #exit(0)
+
+    f, t, Zxx = signal.stft(waveform_padded, fs=16000, nperseg=255, noverlap = 124, nfft=256)
     spectrogram = np.abs(Zxx)
 
-    print("waveform:", waveform.shape, type(waveform))
-    print(waveform[:5])
+    
 
     print("spectrogram:", spectrogram.shape, type(spectrogram))
     print(spectrogram[0, 0])
