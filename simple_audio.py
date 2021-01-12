@@ -1,6 +1,11 @@
 """
-
     simple_audio.py
+
+    
+
+
+    Author: Mahesh Venkitachalam
+    Website: electronut.in
 
 """
 
@@ -8,14 +13,92 @@ from scipy.io import wavfile
 from scipy import signal
 import numpy as np
 import argparse 
+import pyaudio
+import wave
 
 from tflite_runtime.interpreter import Interpreter
+
+VERBOSE_DEBUG = False
+
+# get pyaudio input device
+def getInputDevice(p):
+    index = None
+    nDevices = p.get_device_count()
+    print('Found %d devices:' % nDevices)
+    for i in range(nDevices):
+        deviceInfo = p.get_device_info_by_index(i)
+        #print(deviceInfo)
+        devName = deviceInfo['name']
+        print(devName)
+        # look for the "input" keyword
+        # choose the first such device as input
+        # change this loop to modify this behavior
+        # maybe you want "mic"?
+        if not index:
+            if 'input' in devName.lower():
+                index = i
+    # print out chosen device
+    if index is not None:
+        devName = p.get_device_info_by_index(index)["name"]
+        #print("Input device chosen: %s" % devName)
+    return index
+
+def get_live_input():
+    CHUNK = 4096
+    FORMAT = pyaudio.paInt32
+    CHANNELS = 2
+    RATE = 16000 
+    RECORD_SECONDS = 1
+    WAVE_OUTPUT_FILENAME = "test.wav"
+    NFRAMES = int((RATE * RECORD_SECONDS) / CHUNK)
+
+    # initialize pyaudio
+    p = pyaudio.PyAudio()
+    getInputDevice(p)
+
+    print('opening stream...')
+    stream = p.open(format = FORMAT,
+                    channels = CHANNELS,
+                    rate = RATE,
+                    input = True,
+                    frames_per_buffer = CHUNK,
+                    input_device_index = 1)
+
+    frames = []
+
+    # discard first 1 second
+    for i in range(0, NFRAMES):
+        data = stream.read(CHUNK)
+
+    try:
+        while True:
+            print("Listening...")
+
+            for i in range(0, NFRAMES):
+                data = stream.read(CHUNK)
+                frames.append(data)
+
+            # process data
+            buffer = b''.join(frames)
+            audio_data = np.frombuffer(buffer, dtype=np.int32)
+            print(audio_data.shape, audio_data[:5])
+
+            print("inferring...")
+            break
+    except KeyboardInterrupt:
+        print("exiting...")
+           
+    stream.stop_stream()
+    stream.close()
+    p.terminate()
 
 def get_spectrogram(wavfile_name):
     
     rate, waveform = wavfile.read(wavfile_name)
-    print("waveform:", waveform.shape, waveform.dtype, type(waveform))
-    print(waveform[:5])
+
+    if VERBOSE_DEBUG:
+        print("waveform:", waveform.shape, waveform.dtype, type(waveform))
+        print(waveform[:5])
 
     # if stereo, pick the left channel
     if len(waveform.shape) == 2:
@@ -25,39 +108,43 @@ def get_spectrogram(wavfile_name):
         waveform = waveform 
     spectrogram = None
         
-    print("After scaling:")
-    print("waveform:", waveform.shape, waveform.dtype, type(waveform))
-    print(waveform[:5])
+    if VERBOSE_DEBUG:
+        print("After scaling:")
+        print("waveform:", waveform.shape, waveform.dtype, type(waveform))
+        print(waveform[:5])
 
     # normalise audio
     wabs = np.abs(waveform)
-    print("wabs :", wabs.shape)
-    print(wabs[:5])
     wmax = np.max(wabs)
-    print("wmax = ", wmax)
     waveform = waveform / wmax
-    print("After normalisation:")
-    print("waveform:", waveform.shape, waveform.dtype, type(waveform))
-    print(waveform[:5])
+    if VERBOSE_DEBUG:
+        print("After normalisation:")
+        print("waveform:", waveform.shape, waveform.dtype, type(waveform))
+        print(waveform[:5])
 
     # Padding for files with less than 16000 samples
-    print("After padding:")
+    if VERBOSE_DEBUG:
+        print("After padding:")
+
     waveform_padded = np.zeros((16000,))
     waveform_padded[:waveform.shape[0]] = waveform
-    print("waveform_padded:", waveform_padded.shape, waveform_padded.dtype, type(waveform_padded))
-    print(waveform_padded[:5])
+
+    if VERBOSE_DEBUG:
+        print("waveform_padded:", waveform_padded.shape, waveform_padded.dtype, type(waveform_padded))
+        print(waveform_padded[:5])
 
     #exit(0)
 
+    # compute spectrogram 
     f, t, Zxx = signal.stft(waveform_padded, fs=16000, nperseg=255, noverlap = 124, nfft=256)
     spectrogram = np.abs(Zxx)
 
-    
-
-    print("spectrogram:", spectrogram.shape, type(spectrogram))
-    print(spectrogram[0, 0])
+    if VERBOSE_DEBUG:
+        print("spectrogram:", spectrogram.shape, type(spectrogram))
+        print(spectrogram[0, 0])
         
     return waveform, spectrogram
+
 
 def get_inference(wavfile_name):
 
@@ -89,16 +176,6 @@ def get_inference(wavfile_name):
     commands = ['go', 'down', 'up', 'stop', 'yes', 'left', 'right', 'no']
     print(output_data[0])
     print(commands[np.argmax(output_data[0])])
-    
-    
-"""
-    prediction = model(spectrogram1)
-    print(prediction)
-    sm = tf.nn.softmax(prediction[0])
-    am = tf.math.argmax(sm)
-    print(sm)
-    print(commands[am])
-"""
 
 def main():
 
@@ -116,15 +193,15 @@ def main():
     # parse args
     args = parser.parse_args()
 
-
     # test WAV file
     if args.wavfile_name:
         wavfile_name = args.wavfile_name
+        # run inference
+        get_inference(wavfile_name)
     else:
-        wavfile_name = 'c1d39ce8_nohash_9.wav'
+        get_live_input()
 
-    # run inference
-    get_inference(wavfile_name)
+    print("done.")
 
 # main method
 if __name__ == '__main__':
