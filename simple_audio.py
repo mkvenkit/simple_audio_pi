@@ -64,8 +64,6 @@ def get_live_input():
                     frames_per_buffer = CHUNK,
                     input_device_index = 1)
 
-    frames = []
-
     # discard first 1 second
     for i in range(0, NFRAMES):
         data = stream.read(CHUNK)
@@ -74,17 +72,20 @@ def get_live_input():
         while True:
             print("Listening...")
 
+            frames = []
             for i in range(0, NFRAMES):
                 data = stream.read(CHUNK)
                 frames.append(data)
 
             # process data
+            # 4096 * 3 frames * 2 channels * 4 bytes = 98304 bytes 
             buffer = b''.join(frames)
             audio_data = np.frombuffer(buffer, dtype=np.int32)
+            audio_data = audio_data.reshape((12288, 2))
             print(audio_data.shape, audio_data[:5])
 
             print("inferring...")
-            break
+            get_inference(audio_data)
     except KeyboardInterrupt:
         print("exiting...")
            
@@ -92,10 +93,8 @@ def get_live_input():
     stream.close()
     p.terminate()
 
-def get_spectrogram(wavfile_name):
+def get_spectrogram(waveform):
     
-    rate, waveform = wavfile.read(wavfile_name)
-
     if VERBOSE_DEBUG:
         print("waveform:", waveform.shape, waveform.dtype, type(waveform))
         print(waveform[:5])
@@ -143,13 +142,13 @@ def get_spectrogram(wavfile_name):
         print("spectrogram:", spectrogram.shape, type(spectrogram))
         print(spectrogram[0, 0])
         
-    return waveform, spectrogram
+    return spectrogram
 
 
-def get_inference(wavfile_name):
+def get_inference(waveform):
 
     # get spectrogram data 
-    waveform, spectrogram = get_spectrogram(wavfile_name)
+    spectrogram = get_spectrogram(waveform)
 
     spectrogram1= np.reshape(spectrogram, (-1, spectrogram.shape[0], spectrogram.shape[1], 1))
     print("spectrogram1: %s, %s, %s" % (type(spectrogram1), spectrogram1.dtype, spectrogram1.shape))
@@ -196,8 +195,10 @@ def main():
     # test WAV file
     if args.wavfile_name:
         wavfile_name = args.wavfile_name
+        # get audio data 
+        rate, waveform = wavfile.read(wavfile_name)
         # run inference
-        get_inference(wavfile_name)
+        get_inference(waveform)
     else:
         get_live_input()
 
