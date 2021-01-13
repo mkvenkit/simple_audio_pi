@@ -1,8 +1,8 @@
 import pyaudio
 import numpy as np
-from scipy.io import wavfile
 
 import wave
+import argparse 
 
 # get pyaudio input device
 def getInputDevice(p):
@@ -29,12 +29,34 @@ def getInputDevice(p):
 
 def main():
 
+    # create parser
+    descStr = """
+    This program collects audio data from an I2S mic and saves to a WAV file.
+    """
+    parser = argparse.ArgumentParser(description=descStr)
+ 
+    # add expected arguments
+    parser.add_argument('--output', dest='wavfile_name', required=False)
+    parser.add_argument('--nsec', dest='nsec', required=False)
+    
+    # parse args
+    args = parser.parse_args()
+
+    # set defaults
+    wavfile_name = 'out.wav'
+    nsec = 1
+    # set args
+    if args.wavfile_name:
+        wavfile_name = args.wavfile_name
+    if args.nsec:
+        nsec = int(args.nsec)
+
     CHUNK = 4096
     FORMAT = pyaudio.paInt32
     CHANNELS = 2
     RATE = 16000 
-    RECORD_SECONDS = 1
-    WAVE_OUTPUT_FILENAME = "test.wav"
+    RECORD_SECONDS = nsec
+    WAVE_OUTPUT_FILENAME = wavfile_name
     NFRAMES = int((RATE * RECORD_SECONDS) / CHUNK)
 
     # initialize pyaudio
@@ -55,6 +77,7 @@ def main():
     for i in range(0, NFRAMES):
         data = stream.read(CHUNK)
 
+    print("Collecting data for %d seconds in %s..." % (nsec, wavfile_name))
     print("start recording!")
 
     for i in range(0, NFRAMES):
@@ -72,6 +95,8 @@ def main():
     wf.setframerate(RATE)
     wf.writeframes(b''.join(frames))
     wf.close()
+
+    print("done.")
 
 # main method
 if __name__ == '__main__':
