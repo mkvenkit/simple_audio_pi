@@ -48,7 +48,7 @@ def get_live_input():
     FORMAT = pyaudio.paInt32
     CHANNELS = 2
     RATE = 16000 
-    RECORD_SECONDS = 1
+    RECORD_SECONDS = 3
     WAVE_OUTPUT_FILENAME = "test.wav"
     NFRAMES = int((RATE * RECORD_SECONDS) / CHUNK)
 
@@ -79,13 +79,14 @@ def get_live_input():
 
             # process data
             # 4096 * 3 frames * 2 channels * 4 bytes = 98304 bytes 
+            # CHUNK * NFRAMES * 2 * 4 
             buffer = b''.join(frames)
             audio_data = np.frombuffer(buffer, dtype=np.int32)
-            audio_data = audio_data.reshape((12288, 2))
-            print(audio_data.shape, audio_data[:5])
-
-            print("inferring...")
-            get_inference(audio_data)
+            nbytes = CHUNK * NFRAMES 
+            # reshape for input 
+            audio_data = audio_data.reshape((nbytes, 2))
+            # run inference on audio data 
+            run_inference(audio_data)
     except KeyboardInterrupt:
         print("exiting...")
            
@@ -93,8 +94,14 @@ def get_live_input():
     stream.close()
     p.terminate()
 
-def get_spectrogram(waveform):
-    
+def process_audio_data(waveform):
+    """Process audio input.
+
+    This function takes in raw audio data from a WAV file and does scaling 
+    and padding to 16000 length.
+
+    """
+
     if VERBOSE_DEBUG:
         print("waveform:", waveform.shape, waveform.dtype, type(waveform))
         print(waveform[:5])
@@ -105,8 +112,7 @@ def get_spectrogram(waveform):
         waveform = waveform.T[1]
     else: 
         waveform = waveform 
-    spectrogram = None
-        
+
     if VERBOSE_DEBUG:
         print("After scaling:")
         print("waveform:", waveform.shape, waveform.dtype, type(waveform))
@@ -116,10 +122,27 @@ def get_spectrogram(waveform):
     wabs = np.abs(waveform)
     wmax = np.max(wabs)
     waveform = waveform / wmax
+
+    PTP = np.ptp(waveform)
+    print("peak-to-peak: ", PTP)
+
+    # return None if too silent 
+    if PTP < 0.3:
+        return []
+
     if VERBOSE_DEBUG:
         print("After normalisation:")
         print("waveform:", waveform.shape, waveform.dtype, type(waveform))
         print(waveform[:5])
+
+    # scale and center
+    waveform = 2.0*(waveform - np.min(waveform))/np.ptp(waveform) - 1
+
+    # extract 16000 len (1 second) of data   
+    max_index = np.argmax(waveform)  
+    start_index = max(0, max_index-8000)
+    end_index = min(max_index+8000, waveform.shape[0])
+    waveform = waveform[start_index:end_index]
 
     # Padding for files with less than 16000 samples
     if VERBOSE_DEBUG:
@@ -132,10 +155,19 @@ def get_spectrogram(waveform):
         print("waveform_padded:", waveform_padded.shape, waveform_padded.dtype, type(waveform_padded))
         print(waveform_padded[:5])
 
-    #exit(0)
+    return waveform_padded
+
+def get_spectrogram(waveform):
+    
+    waveform_padded = process_audio_data(waveform)
+
+    if not len(waveform_padded):
+        return []
 
     # compute spectrogram 
-    f, t, Zxx = signal.stft(waveform_padded, fs=16000, nperseg=255, noverlap = 124, nfft=256)
+    f, t, Zxx = signal.stft(waveform_padded, fs=16000, nperseg=255, 
+        noverlap = 124, nfft=256)
+    # Output is complex, so take abs value
     spectrogram = np.abs(Zxx)
 
     if VERBOSE_DEBUG:
@@ -145,13 +177,19 @@ def get_spectrogram(waveform):
     return spectrogram
 
 
-def get_inference(waveform):
+def run_inference(waveform):
 
     # get spectrogram data 
     spectrogram = get_spectrogram(waveform)
 
+    if not len(spectrogram):
+        print("Too silent. Skipping...")
+        return 
+
     spectrogram1= np.reshape(spectrogram, (-1, spectrogram.shape[0], spectrogram.shape[1], 1))
-    print("spectrogram1: %s, %s, %s" % (type(spectrogram1), spectrogram1.dtype, spectrogram1.shape))
+    
+    if VERBOSE_DEBUG:
+        print("spectrogram1: %s, %s, %s" % (type(spectrogram1), spectrogram1.dtype, spectrogram1.shape))
 
     # load TF Lite model
     interpreter = Interpreter('simple_audio_model_numpy.tflite')
@@ -168,12 +206,15 @@ def get_inference(waveform):
     input_data = spectrogram1.astype(np.float32)
     interpreter.set_tensor(input_details[0]['index'], input_data)
 
+    print("running inference...")
     interpreter.invoke()
 
     output_data = interpreter.get_tensor(output_details[0]['index'])
     yvals = output_data[0]
     commands = ['go', 'down', 'up', 'stop', 'yes', 'left', 'right', 'no']
-    print(output_data[0])
+
+    if VERBOSE_DEBUG:
+        print(output_data[0])
     print(commands[np.argmax(output_data[0])])
 
 def main():
@@ -198,7 +239,7 @@ def main():
         # get audio data 
         rate, waveform = wavfile.read(wavfile_name)
         # run inference
-        get_inference(waveform)
+        run_inference(waveform)
     else:
         get_live_input()
 
