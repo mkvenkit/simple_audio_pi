@@ -215,7 +215,7 @@ def run_inference(waveform):
 
     if VERBOSE_DEBUG:
         print(output_data[0])
-    print(commands[np.argmax(output_data[0])])
+    print(">>> " + commands[np.argmax(output_data[0])].upper())
 
 def main():
 
