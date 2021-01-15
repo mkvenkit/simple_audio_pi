@@ -15,8 +15,11 @@ import numpy as np
 import argparse 
 import pyaudio
 import wave
+import time
 
 from tflite_runtime.interpreter import Interpreter
+
+from display_ssd1306 import SSD1306_Display
 
 VERBOSE_DEBUG = False
 
@@ -43,7 +46,7 @@ def getInputDevice(p):
         #print("Input device chosen: %s" % devName)
     return index
 
-def get_live_input():
+def get_live_input(disp):
     CHUNK = 4096
     FORMAT = pyaudio.paInt32
     CHANNELS = 2
@@ -66,15 +69,16 @@ def get_live_input():
 
     # discard first 1 second
     for i in range(0, NFRAMES):
-        data = stream.read(CHUNK)
+        data = stream.read(CHUNK, exception_on_overflow = False)
 
     try:
         while True:
             print("Listening...")
+            disp.show_txt(0, 0, "Listening...", True)
 
             frames = []
             for i in range(0, NFRAMES):
-                data = stream.read(CHUNK)
+                data = stream.read(CHUNK, exception_on_overflow = False)
                 frames.append(data)
 
             # process data
@@ -86,7 +90,7 @@ def get_live_input():
             # reshape for input 
             audio_data = audio_data.reshape((nbytes, 2))
             # run inference on audio data 
-            run_inference(audio_data)
+            run_inference(disp, audio_data)
     except KeyboardInterrupt:
         print("exiting...")
            
@@ -127,7 +131,7 @@ def process_audio_data(waveform):
     print("peak-to-peak: ", PTP)
 
     # return None if too silent 
-    if PTP < 0.3:
+    if PTP < 1.0:
         return []
 
     if VERBOSE_DEBUG:
@@ -177,13 +181,15 @@ def get_spectrogram(waveform):
     return spectrogram
 
 
-def run_inference(waveform):
+def run_inference(disp, waveform):
 
     # get spectrogram data 
     spectrogram = get_spectrogram(waveform)
 
     if not len(spectrogram):
+        disp.show_txt(0, 0, "Silent. Skip...", True)
         print("Too silent. Skipping...")
+        time.sleep(1)
         return 
 
     spectrogram1= np.reshape(spectrogram, (-1, spectrogram.shape[0], spectrogram.shape[1], 1))
@@ -216,6 +222,8 @@ def run_inference(waveform):
     if VERBOSE_DEBUG:
         print(output_data[0])
     print(">>> " + commands[np.argmax(output_data[0])].upper())
+    disp.show_txt(32, 10, commands[np.argmax(output_data[0])].upper(), True)
+    time.sleep(1)
 
 def main():
 
@@ -233,15 +241,17 @@ def main():
     # parse args
     args = parser.parse_args()
 
+    disp = SSD1306_Display()
+    
     # test WAV file
     if args.wavfile_name:
         wavfile_name = args.wavfile_name
         # get audio data 
         rate, waveform = wavfile.read(wavfile_name)
         # run inference
-        run_inference(waveform)
+        run_inference(disp, waveform)
     else:
-        get_live_input()
+        get_live_input(disp)
 
     print("done.")
 
