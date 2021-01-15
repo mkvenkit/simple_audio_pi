@@ -74,7 +74,7 @@ def get_live_input(disp):
     try:
         while True:
             print("Listening...")
-            disp.show_txt(0, 0, "Listening...", True)
+            disp.show_txt(0, 0, "Listening...", False)
 
             frames = []
             for i in range(0, NFRAMES):
@@ -128,10 +128,10 @@ def process_audio_data(waveform):
     waveform = waveform / wmax
 
     PTP = np.ptp(waveform)
-    print("peak-to-peak: ", PTP)
+    print("peak-to-peak: %.4f. Adjust as needed." % (PTP,))
 
     # return None if too silent 
-    if PTP < 1.0:
+    if PTP < 0.5:
         return []
 
     if VERBOSE_DEBUG:
@@ -187,9 +187,9 @@ def run_inference(disp, waveform):
     spectrogram = get_spectrogram(waveform)
 
     if not len(spectrogram):
-        disp.show_txt(0, 0, "Silent. Skip...", True)
+        #disp.show_txt(0, 0, "Silent. Skip...", True)
         print("Too silent. Skipping...")
-        time.sleep(1)
+        #time.sleep(1)
         return 
 
     spectrogram1= np.reshape(spectrogram, (-1, spectrogram.shape[0], spectrogram.shape[1], 1))
@@ -222,8 +222,8 @@ def run_inference(disp, waveform):
     if VERBOSE_DEBUG:
         print(output_data[0])
     print(">>> " + commands[np.argmax(output_data[0])].upper())
-    disp.show_txt(32, 10, commands[np.argmax(output_data[0])].upper(), True)
-    time.sleep(1)
+    disp.show_txt(0, 12, commands[np.argmax(output_data[0])].upper(), True)
+    #time.sleep(1)
 
 def main():
 
