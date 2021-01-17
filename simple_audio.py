@@ -1,7 +1,8 @@
 """
     simple_audio.py
 
-    
+    This programs collects audio data from an I2S mic on the Raspberry Pi 
+    and runs the TensorFlow Lite interpreter on a per-build model. 
 
 
     Author: Mahesh Venkitachalam
@@ -140,7 +141,7 @@ def process_audio_data(waveform):
         print(waveform[:5])
 
     # scale and center
-    waveform = 2.0*(waveform - np.min(waveform))/np.ptp(waveform) - 1
+    waveform = 2.0*(waveform - np.min(waveform))/PTP - 1
 
     # extract 16000 len (1 second) of data   
     max_index = np.argmax(waveform)  

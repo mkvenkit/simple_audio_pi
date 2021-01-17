@@ -1,3 +1,14 @@
+"""
+    audio_test.py
+
+    This programs collects audio data from an I2S mic on the Raspberry Pi 
+    and saves it in a WAV file.
+
+    Author: Mahesh Venkitachalam
+    Website: electronut.in
+
+"""
+
 import pyaudio
 import numpy as np
 
@@ -5,27 +16,14 @@ import wave
 import argparse 
 
 # get pyaudio input device
-def getInputDevice(p):
-    index = None
+def list_input_devices(p):
     nDevices = p.get_device_count()
     print('Found %d devices:' % nDevices)
     for i in range(nDevices):
         deviceInfo = p.get_device_info_by_index(i)
-        #print(deviceInfo)
+        print(deviceInfo)
         devName = deviceInfo['name']
         print(devName)
-        # look for the "input" keyword
-        # choose the first such device as input
-        # change this loop to modify this behavior
-        # maybe you want "mic"?
-        if not index:
-            if 'input' in devName.lower():
-                index = i
-    # print out chosen device
-    if index is not None:
-        devName = p.get_device_info_by_index(index)["name"]
-        #print("Input device chosen: %s" % devName)
-    return index
 
 def main():
 
@@ -38,7 +36,8 @@ def main():
     # add expected arguments
     parser.add_argument('--output', dest='wavfile_name', required=False)
     parser.add_argument('--nsec', dest='nsec', required=False)
-    
+    parser.add_argument('--list', action='store_true', required=False)
+
     # parse args
     args = parser.parse_args()
 
@@ -50,6 +49,15 @@ def main():
         wavfile_name = args.wavfile_name
     if args.nsec:
         nsec = int(args.nsec)
+    if args.list:
+        # list devices
+        print("Listing devices...")
+        # initialize pyaudio
+        p = pyaudio.PyAudio()
+        list_input_devices(p)
+        p.terminate()
+        print("done.")
+        exit(0)
 
     CHUNK = 4096
     FORMAT = pyaudio.paInt32
@@ -61,7 +69,6 @@ def main():
 
     # initialize pyaudio
     p = pyaudio.PyAudio()
-    getInputDevice(p)
 
     print('opening stream...')
     stream = p.open(format = FORMAT,
